@@ -31,6 +31,8 @@ type Connection struct {
 	PingFreq         time.Duration
 	KeepAlive        time.Duration
 	Server           string
+	Proxy		 string
+	ProxyPort	 int
 
 	RealName string // The real name we want to display.
 	// If zero-value defaults to the user.
