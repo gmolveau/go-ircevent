@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"golang.org/x/net/proxy"
 )
 
 const (
@@ -120,7 +121,7 @@ func parseToEvent(msg string) (*Event, error) {
 					event.Tags[parts[0]] = unescapeTagValue(parts[1])
 				}
 			}
-			msg = msg[i+1 : len(msg)]
+			msg = msg[i+1:]
 		} else {
 			return nil, errors.New("Malformed msg from server")
 		}
@@ -129,7 +130,7 @@ func parseToEvent(msg string) (*Event, error) {
 	if msg[0] == ':' {
 		if i := strings.Index(msg, " "); i > -1 {
 			event.Source = msg[1:i]
-			msg = msg[i+1 : len(msg)]
+			msg = msg[i+1:]
 
 		} else {
 			return nil, errors.New("Malformed msg from server")
@@ -455,10 +456,20 @@ func (irc *Connection) Connect(server string) error {
 	}
 
 	if irc.UseTLS {
-		dialer := &net.Dialer{Timeout: irc.Timeout}
-		irc.socket, err = tls.DialWithDialer(dialer, "tcp", irc.Server, irc.TLSConfig)
+		// fix use of TLS with proxy
+		irc.socket, err = tls.DialWithDialer(&net.Dialer{Timeout: irc.Timeout}, "tcp", irc.Server, irc.TLSConfig)
+
 	} else {
-		irc.socket, err = net.DialTimeout("tcp", irc.Server, irc.Timeout)
+		if irc.Proxy != "" {
+			dialer, err := proxy.SOCKS5("tcp", irc.Proxy, nil, proxy.Direct)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "can't connect to the proxy:", err)
+				os.Exit(1)
+			}
+			irc.socket, err = dialer.Dial("tcp", irc.Server)
+		} else {
+			irc.socket, err = net.DialTimeout("tcp", irc.Server, irc.Timeout)
+		}
 	}
 	if err != nil {
 		return err
